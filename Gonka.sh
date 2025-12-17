@@ -1848,8 +1848,84 @@ EOF
     read -p "按 Enter 键返回主菜单..."
 }
 
-# 命令4：创建 ML 操作密钥
-command4_create_ml_key() {
+# 命令4：检查同步状态
+command4_check_sync_status() {
+    clear
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN}   命令4：检查同步状态${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo ""
+    
+    # 保存当前工作目录
+    ORIGINAL_DIR=$(pwd)
+    
+    # 确定配置目录路径
+    if [ "$EUID" -eq 0 ]; then
+        CONFIG_DIR="/root/gonka/deploy/join"
+    else
+        CONFIG_DIR="$HOME/gonka/deploy/join"
+    fi
+    
+    # 检查配置目录是否存在
+    if [ ! -d "$CONFIG_DIR" ]; then
+        echo -e "${RED}[错误] 未找到配置目录: $CONFIG_DIR${NC}"
+        echo -e "${YELLOW}[提示] 请先执行命令1：部署环境${NC}"
+        echo ""
+        read -p "按 Enter 键返回主菜单..."
+        return 1
+    fi
+    
+    # 进入配置目录
+    cd "$CONFIG_DIR" || {
+        echo -e "${RED}[错误] 无法进入配置目录${NC}"
+        cd "$ORIGINAL_DIR"
+        read -p "按 Enter 键返回主菜单..."
+        return 1
+    }
+    
+    # 检查 docker 是否可用
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}[错误] Docker 未安装${NC}"
+        echo -e "${YELLOW}[提示] 请先执行命令1：部署环境${NC}"
+        echo ""
+        cd "$ORIGINAL_DIR"
+        read -p "按 Enter 键返回主菜单..."
+        return 1
+    fi
+    
+    # 使用 sudo 或直接运行，取决于用户是否在 docker 组中或是否为 root
+    DOCKER_COMPOSE_CMD="docker compose"
+    if [ "$EUID" -ne 0 ] && ! groups | grep -q docker; then
+        DOCKER_COMPOSE_CMD="sudo docker compose"
+    fi
+    
+    echo -e "${GREEN}[步骤] 正在查看同步状态日志...${NC}"
+    echo -e "${YELLOW}[提示] 将显示 tmkms 和 node 服务的日志，等待10秒后可按任意键返回${NC}"
+    echo ""
+    
+    # 显示日志（后台运行）
+    $DOCKER_COMPOSE_CMD logs tmkms node -f &
+    LOG_PID=$!
+    
+    # 等待10秒
+    sleep 10
+    
+    # 停止日志显示
+    kill $LOG_PID 2>/dev/null || true
+    
+    echo ""
+    echo -e "${GREEN}✓ 日志查看完成${NC}"
+    echo ""
+    
+    # 返回原目录
+    cd "$ORIGINAL_DIR"
+    
+    echo ""
+    read -p "按任意键返回主菜单..."
+}
+
+# 命令5：创建 ML 操作密钥
+command5_create_ml_key() {
     clear
     echo -e "${CYAN}========================================${NC}"
     echo -e "${CYAN}   命令4：创建 ML 操作密钥${NC}"
@@ -2215,8 +2291,8 @@ command4_create_ml_key() {
     read -p "按 Enter 键返回主菜单..."
 }
 
-# 命令5：启动全节点
-command5_start_full_node() {
+# 命令6：启动全节点
+command6_start_full_node() {
     clear
     echo -e "${CYAN}========================================${NC}"
     echo -e "${CYAN}   命令5：启动全节点${NC}"
@@ -2362,8 +2438,8 @@ command5_start_full_node() {
     read -p "按 Enter 键返回主菜单..."
 }
 
-# 命令6：验证节点状态
-command6_verify_node_status() {
+# 命令7：验证节点状态
+command7_verify_node_status() {
     clear
     echo -e "${CYAN}========================================${NC}"
     echo -e "${CYAN}   命令6：验证节点状态${NC}"
@@ -2470,7 +2546,7 @@ command6_verify_node_status() {
         else
             echo -e "${YELLOW}[警告] 无法访问验证地址${NC}"
             echo -e "${YELLOW}[提示] 请检查：${NC}"
-            echo -e "${YELLOW}   1. 节点服务是否已启动（执行命令5）${NC}"
+            echo -e "${YELLOW}   1. 节点服务是否已启动（执行命令6）${NC}"
             echo -e "${YELLOW}   2. 网络连接是否正常${NC}"
             echo -e "${YELLOW}   3. 钱包地址是否正确${NC}"
             echo ""
@@ -2515,13 +2591,16 @@ show_main_menu() {
     echo -e "${YELLOW}  3. 配置环境变量${NC}"
     echo -e "${YELLOW}      - 配置节点名称、密码、端口等${NC}"
     echo ""
-    echo -e "${YELLOW}  4. 创建 ML 操作密钥${NC}"
+    echo -e "${YELLOW}  4. 检查同步状态${NC}"
+    echo -e "${YELLOW}      - 查看 tmkms 和 node 服务日志${NC}"
+    echo ""
+    echo -e "${YELLOW}  5. 创建 ML 操作密钥${NC}"
     echo -e "${YELLOW}      - 在 API 容器中创建 ML 操作密钥${NC}"
     echo ""
-    echo -e "${YELLOW}  5. 启动全节点${NC}"
+    echo -e "${YELLOW}  6. 启动全节点${NC}"
     echo -e "${YELLOW}      - 启动所有 Docker 服务${NC}"
     echo ""
-    echo -e "${YELLOW}  6. 验证节点状态${NC}"
+    echo -e "${YELLOW}  7. 验证节点状态${NC}"
     echo -e "${YELLOW}      - 生成验证地址并检查节点状态${NC}"
     echo ""
     echo -e "${YELLOW}  0. 退出${NC}"
@@ -2534,7 +2613,7 @@ show_main_menu() {
 main() {
     while true; do
         show_main_menu
-        read -p "请输入选项 [0-6]: " choice
+        read -p "请输入选项 [0-7]: " choice
         echo ""
         
         case $choice in
@@ -2548,13 +2627,16 @@ main() {
                 command3_configure_env
                 ;;
             4)
-                command4_create_ml_key
+                command4_check_sync_status
                 ;;
             5)
-                command5_start_full_node
+                command5_create_ml_key
                 ;;
             6)
-                command6_verify_node_status
+                command6_start_full_node
+                ;;
+            7)
+                command7_verify_node_status
                 ;;
             0)
                 echo -e "${GREEN}感谢使用，再见！${NC}"
